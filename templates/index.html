@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Web Absensi AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .camera-container {
+        position: relative;
+        width: 100%;
+        max-width: 300px;
+        aspect-ratio: 3 / 4;
+        margin: 0 auto;
+        background-color: #000;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+      #webcam {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        /* Menghilangkan efek mirror pada kamera depan */
+        transform: scaleX(-1);
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-6 rounded-2xl shadow-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">
+        Absensi Wajah AI
+      </h2>
+
+      <!-- Navigasi 3 Menu -->
+      <div class="flex justify-center gap-2 mb-6 text-sm font-medium">
+        <button
+          onclick="gantiMenu('absen')"
+          id="nav-absen"
+          class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow"
+        >
+          Absen
+        </button>
+        <button
+          onclick="gantiMenu('rekap')"
+          id="nav-rekap"
+          class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200"
+        >
+          Rekap
+        </button>
+        <button
+          onclick="gantiMenu('error')"
+          id="nav-error"
+          class="bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100"
+        >
+          Lapor Error
+        </button>
+      </div>
+
+      <!-- MENU 1: ABSEN -->
+      <div id="section-absen" class="menu-section">
+        <div class="camera-container mb-4">
+          <video id="webcam" autoplay playsinline></video>
+        </div>
+
+        <!-- PILIHAN AKTIVITAS ABSEN -->
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-2"
+            >Pilih Aktivitas:</label
+          >
+          <select
+            id="jenis_absen"
+            class="w-full border px-3 py-2 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="Masuk">Masuk (Reguler)</option>
+            <option value="Masuk (Shift Lembur)">
+              Masuk (Shift Lembur 10.00 - 22.00)
+            </option>
+            <option value="Pulang">Absen Pulang</option>
+          </select>
+        </div>
+
+        <button
+          id="btn-absen"
+          class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl transition duration-200 text-lg"
+        >
+          📸 Ambil Foto & Absen
+        </button>
+        <p
+          id="status-absen"
+          class="text-center mt-4 text-sm font-semibold text-gray-600"
+        ></p>
+      </div>
+
+      <!-- MENU 2: REKAP BULANAN -->
+      <div id="section-rekap" class="menu-section hidden">
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-2"
+            >Masukkan Kode Karyawan (Cth: KRY001)</label
+          >
+          <input
+            type="text"
+            id="kode-rekap"
+            class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Kode Karyawan"
+          />
+        </div>
+        <button
+          onclick="cekRekap()"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl"
+        >
+          Cari Rekap Kehadiran
+        </button>
+        <div
+          id="hasil-rekap"
+          class="mt-4 text-sm text-gray-700 max-h-60 overflow-y-auto"
+        ></div>
+      </div>
+
+      <!-- MENU 3: LAPOR ERROR -->
+      <div id="section-error" class="menu-section hidden">
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-2"
+            >Kode Karyawan</label
+          >
+          <input
+            type="text"
+            id="kode-error"
+            class="w-full border px-3 py-2 rounded-lg mb-3"
+            placeholder="Contoh: KRY001"
+          />
+          <label class="block text-sm font-semibold text-gray-700 mb-2"
+            >Keterangan Kendala</label
+          >
+          <textarea
+            id="ket-error"
+            class="w-full border px-3 py-2 rounded-lg h-24"
+            placeholder="Jelaskan masalah Anda (misal: Wajah tidak terdeteksi)"
+          ></textarea>
+        </div>
+        <button
+          onclick="kirimLaporan()"
+          class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl"
+        >
+          Kirim Laporan Error
+        </button>
+        <p id="status-error" class="text-center mt-3 text-sm font-semibold"></p>
+      </div>
+    </div>
+
+    <script>
+      const video = document.getElementById("webcam");
+      let mediaStream = null;
+
+      function gantiMenu(menu) {
+        document
+          .querySelectorAll(".menu-section")
+          .forEach((el) => el.classList.add("hidden"));
+        document.getElementById("nav-absen").className =
+          "bg-gray-100 text-gray-600 px-4 py-2 rounded-lg";
+        document.getElementById("nav-rekap").className =
+          "bg-gray-100 text-gray-600 px-4 py-2 rounded-lg";
+        document.getElementById("nav-error").className =
+          "bg-gray-100 text-gray-600 px-4 py-2 rounded-lg";
+
+        if (menu === "absen") {
+          document.getElementById("section-absen").classList.remove("hidden");
+          document.getElementById("nav-absen").className =
+            "bg-blue-600 text-white px-4 py-2 rounded-lg shadow";
+          nyalakanKamera();
+        } else {
+          matikanKamera();
+          if (menu === "rekap") {
+            document.getElementById("section-rekap").classList.remove("hidden");
+            document.getElementById("nav-rekap").className =
+              "bg-blue-600 text-white px-4 py-2 rounded-lg shadow";
+          } else if (menu === "error") {
+            document.getElementById("section-error").classList.remove("hidden");
+            document.getElementById("nav-error").className =
+              "bg-red-600 text-white px-4 py-2 rounded-lg shadow";
+          }
+        }
+      }
+
+      function nyalakanKamera() {
+        navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: "user" } })
+          .then((stream) => {
+            mediaStream = stream;
+            video.srcObject = stream;
+          })
+          .catch((err) => {
+            console.log("Kamera tidak aktif");
+          });
+      }
+
+      function matikanKamera() {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+        }
+      }
+
+      nyalakanKamera();
+
+      document.getElementById("btn-absen").addEventListener("click", () => {
+        const statusTxt = document.getElementById("status-absen");
+        const jenisAbsen = document.getElementById("jenis_absen").value;
+
+        statusTxt.innerText = "Mengambil koordinat GPS...";
+        statusTxt.className =
+          "text-center mt-4 text-sm font-semibold text-blue-600";
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            const sekarang = new Date();
+            const waktuLokal =
+              sekarang.getFullYear() +
+              "-" +
+              String(sekarang.getMonth() + 1).padStart(2, "0") +
+              "-" +
+              String(sekarang.getDate()).padStart(2, "0") +
+              " " +
+              String(sekarang.getHours()).padStart(2, "0") +
+              ":" +
+              String(sekarang.getMinutes()).padStart(2, "0") +
+              ":" +
+              String(sekarang.getSeconds()).padStart(2, "0");
+
+            statusTxt.innerText = "Memproses wajah AI...";
+
+            const canvas = document.createElement("canvas");
+            canvas.width = 480;
+            canvas.height = 640;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(
+              (blob) => {
+                const formData = new FormData();
+                formData.append("file", blob, "capture.jpg");
+                formData.append("latitude", lat);
+                formData.append("longitude", lon);
+                formData.append("waktu_lokal", waktuLokal);
+                formData.append("jenis_absen", jenisAbsen);
+
+                fetch("/api/absen", { method: "POST", body: formData })
+                  .then((res) => res.json())
+                  .then((data) => {
+                    if (data.status === "sukses") {
+                      statusTxt.innerText = "✅ " + data.pesan;
+                      statusTxt.className =
+                        "text-center mt-4 text-sm font-semibold text-green-600";
+                    } else {
+                      statusTxt.innerText = "❌ " + data.pesan;
+                      statusTxt.className =
+                        "text-center mt-4 text-sm font-semibold text-red-600";
+                    }
+                  });
+              },
+              "image/jpeg",
+              0.7,
+            );
+          },
+          (err) => {
+            statusTxt.innerText = "Gagal mengambil GPS. Pastikan lokasi aktif.";
+            statusTxt.className =
+              "text-center mt-4 text-sm font-semibold text-red-600";
+          },
+        );
+      });
+
+      async function cekRekap() {
+        const kode = document.getElementById("kode-rekap").value;
+        const hasilDiv = document.getElementById("hasil-rekap");
+        if (!kode) {
+          alert("Masukkan kode karyawan!");
+          return;
+        }
+
+        const res = await fetch(`/api/rekap/${kode}`);
+        const data = await res.json();
+
+        if (data.status === "sukses") {
+          let html = `<p class="font-bold mb-2">Riwayat Absen: ${data.nama}</p>`;
+          if (data.riwayat.length === 0) {
+            html += `<p class="text-gray-500">Belum ada data absensi.</p>`;
+            hasilDiv.innerHTML = html;
+          } else {
+            hasilDiv.innerHTML =
+              html +
+              `<p class="text-xs text-blue-600 mb-2">Memuat alamat lokasi & status...</p>`;
+
+            let listItems = "";
+            for (let r of data.riwayat) {
+              let alamatTeks = `Lat: ${r.lat.toFixed(4)}, Lon: ${r.lon.toFixed(4)}`;
+              try {
+                const geoRes = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${r.lat}&lon=${r.lon}&accept-language=id`,
+                );
+                const geoData = await geoRes.json();
+                if (geoData && geoData.display_name) {
+                  alamatTeks = geoData.display_name;
+                }
+              } catch (err) {}
+
+              let jenis = r.jenis_absen || "Masuk";
+              let badgeColor = "bg-green-100 text-green-700";
+              let icon = "✅";
+
+              if (jenis === "Pulang") {
+                badgeColor = "bg-gray-200 text-gray-700";
+                icon = "🏠";
+              } else if (jenis.includes("Lembur")) {
+                badgeColor = "bg-purple-100 text-purple-700";
+                icon = "🚀";
+              } else {
+                if (r.status_hadir && r.status_hadir.includes("Terlambat")) {
+                  badgeColor = "bg-red-100 text-red-700";
+                  icon = "⚠️";
+                } else if (
+                  r.status_hadir &&
+                  r.status_hadir.includes("Toleransi")
+                ) {
+                  badgeColor = "bg-yellow-100 text-yellow-800";
+                  icon = "⏱️";
+                } else if (r.status_hadir && r.status_hadir.includes("Awal")) {
+                  badgeColor = "bg-blue-100 text-blue-700";
+                  icon = "⭐";
+                }
+              }
+
+              let statusBadge = `<span class="${badgeColor} px-2 py-0.5 rounded text-xs font-bold inline-block mt-1">${icon} ${jenis} : ${r.status_hadir || "Tepat Waktu"}</span>`;
+
+              listItems += `<li class="bg-gray-50 p-2.5 rounded-lg border text-xs mb-2">
+                🕒 <b>${r.waktu}</b><br>
+                ${statusBadge}<br>
+                📍 <span class="text-gray-600">${alamatTeks}</span>
+              </li>`;
+            }
+            hasilDiv.innerHTML = `<p class="font-bold mb-2">Riwayat Absen: ${data.nama}</p><div class="space-y-2">${listItems}</div>`;
+          }
+        } else {
+          hasilDiv.innerHTML = `<p class="text-red-500">${data.pesan}</p>`;
+        }
+      }
+
+      async function kirimLaporan() {
+        const kode = document.getElementById("kode-error").value;
+        const ket = document.getElementById("ket-error").value;
+        const stat = document.getElementById("status-error");
+
+        if (!kode || !ket) {
+          alert("Semua kolom harus diisi!");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("kode", kode);
+        formData.append("keterangan", ket);
+
+        const res = await fetch("/api/lapor-error", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        stat.innerText = data.pesan;
+        stat.className =
+          data.status === "sukses"
+            ? "text-center mt-3 text-sm font-semibold text-green-600"
+            : "text-center mt-3 text-sm font-semibold text-red-600";
+      }
+    </script>
+  </body>
+</html>
